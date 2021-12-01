@@ -37,7 +37,7 @@ async function getBdxBalanaceOfBDStable(
       target: bdxTokenAddress,
       owner: bdstableContract,
       chain,
-      block,
+      block: block,
     })
   ).output;
 }
