@@ -1,7 +1,6 @@
 const sdk = require("@defillama/sdk");
-const { default: BigNumber } = require("bignumber.js");
 const abi = require("../helper/abis/blindex.json");
-// const { calculateUsdUniTvl } = require("../helper/getUsdUniTvl");
+const { calculateUniTvl } = require("../helper/calculateUniTvl.js");
 
 //-------------------------------------------------------------------------------------------------------------
 // How to add a new chain?
@@ -11,44 +10,45 @@ const abi = require("../helper/abis/blindex.json");
 // 4. Add your new chain to the 'sumChainTvls' function in the export module
 //-------------------------------------------------------------------------------------------------------------
 
-// Test RSK:
+// Test on the RSK network:
 // Go to @defilama/sdk/build/computetvl/blocks.js and add 'rsk' to the chainsForBlocks array
 
 const chains = {
   rsk: {
-    // uniswapFactoryAddress: "0x6d0aE8f3da7A451A82B48594E91Bf9d79491971d", // TODO: Add missing information
-    // bdxTokenAddress: "0xB3dd46A470b2C3df15931238c61C49CDf429DD9a",
-    bdxCoingeckoId: "bdx",
-    // wrappedNativeTokenAddress: "0x542fda317318ebf1d3deaf76e0b632741a7e677d",
-    // wrappedNativeTokenName: "wrbtc",
-
+    uniswapFactoryAddress: "0x6d0aE8f3da7A451A82B48594E91Bf9d79491971d",
+    bdxTokenAddress: "0xB3dd46A470b2C3df15931238c61C49CDf429DD9a",
     bdstables: [
       {
         name: "BDEU",
         address: "0x09b070184E6b57475d5993D9Dd8157f0273EE230",
-        collateral: {
-          btc: {
-            wrappedTokenAddress: "0x542fda317318ebf1d3deaf76e0b632741a7e677d",
-            coingeckoTokenId: "rootstock",
-          },
-          eth: {
-            wrappedTokenAddress: "0x1d931bf8656d795e50ef6d639562c5bd8ac2b78f",
-            coingeckoTokenId: "ethereum",
-          },
-        },
       },
     ],
+    // If a token doesn't exist on CoinGecko, map it to the base token it wrappes
+    coingeckoMapping: {
+      prefix: "rsk",
+      "0x542fda317318ebf1d3deaf76e0b632741a7e677d": "rootstock", // RSK's WRBTC
+      "0x1d931bf8656d795e50ef6d639562c5bd8ac2b78f": "ethereum", // RSK's ETHs
+    },
   },
 };
 
-async function getBDStableCollateralBalances(block, chainName, bdstable) {
-  const btcCoinGekoTokenId = bdstable.collateral.btc.coingeckoTokenId;
-  const ethCoinGekoTokenId = bdstable.collateral.eth.coingeckoTokenId;
-  const balances = {
-    [btcCoinGekoTokenId]: 0,
-    [ethCoinGekoTokenId]: 0,
-  };
+function mapCoingeckoAddress(chainName, address) {
+  let mappedName = chains[chainName].coingeckoMapping[address]
+    ? chains[chainName].coingeckoMapping[address]
+    : chains[chainName].coingeckoMapping[address.toLowerCase()];
 
+  if (!mappedName) {
+    const addressPrefix =
+      chainName === "ethereum"
+        ? ""
+        : `${chains[chainName].coingeckoMapping["prefix"]}:`;
+    mappedName = `${addressPrefix}${address}`;
+  }
+
+  return mappedName;
+}
+
+async function getBDStableCollateralBalances(block, chainName, bdstable) {
   const collateralPoolsLength = (
     await sdk.api.abi.call({
       target: bdstable.address,
@@ -73,21 +73,32 @@ async function getBDStableCollateralBalances(block, chainName, bdstable) {
     bdstableCollateralPools.push(poolAddress);
   }
 
+  const balances = {};
+
   for (let index = 0; index < bdstableCollateralPools.length; index++) {
-    const btcCollateralAddress = bdstable.collateral.btc.wrappedTokenAddress;
-    const ethCollateralAddress = bdstable.collateral.eth.wrappedTokenAddress;
-    balances[btcCoinGekoTokenId] += await getBalanceOfWithPercision(
+    const collateralAddress = await (
+      await sdk.api.abi.call({
+        target: bdstableCollateralPools[index],
+        abi: abi["getBDStablePoolCollateral"],
+        chain: chainName,
+        block,
+      })
+    ).output;
+
+    const coingeckoMappedName = mapCoingeckoAddress(
+      chainName,
+      collateralAddress
+    );
+    const collateralBalance = await getBalanceOfWithPercision(
       block,
       chainName,
       bdstableCollateralPools[index],
-      btcCollateralAddress
+      collateralAddress
     );
-    balances[ethCoinGekoTokenId] += await getBalanceOfWithPercision(
-      block,
-      chainName,
-      bdstableCollateralPools[index],
-      ethCollateralAddress
-    );
+
+    balances[coingeckoMappedName] = balances.hasOwnProperty(coingeckoMappedName)
+      ? balances[coingeckoMappedName] + collateralBalance
+      : collateralBalance;
   }
 
   return balances;
@@ -121,29 +132,27 @@ function sumBalances(balancesArray) {
   }, {});
 }
 
-async function tvl(chainName, timestamp, block) {
-  // const bdxTokenAddress = chains[chainName].bdxTokenAddress;
-  // const wrappedNativeTokenAddress = chains[chainName].wrappedNativeTokenAddress;
-  // const wrappedNativeTokenName = chains[chainName].wrappedNativeTokenName;
-  // const uniswapFactoryAddress = chains[chainName].uniswapFactoryAddress;
+async function uniswapV2Tvl(block, chainName) {
+  return calculateUniTvl(
+    (addr) => mapCoingeckoAddress(chainName, addr),
+    block,
+    chainName,
+    chains[chainName].uniswapFactoryAddress,
+    0,
+    true
+  );
+}
+
+async function tvl(chainName, block) {
   const balancesArray = [];
 
   //=======
   // AMM
   //=======
-  // TODO: What's the core token all about here? Is it actually WRBTC?
-  // TODO: What's the whitelist token all about? What is it being used for in the function? (in our case it's BDX)
-  // let ammTvlInWRBTC = 0;
-  // ammTvlInWRBTC = calculateUsdUniTvl(
-  //   uniswapFactoryAddress,
-  //   chainName,
-  //   wrappedNativeTokenAddress,
-  //   [bdxTokenAddress],
-  //   wrappedNativeTokenName
-  // )[[wrappedNativeTokenName]];
-
-  // console.log(ammTvlInWRBTC);
-  // TODO: Delete this comment: calculateUsdUniTvl returns: { [coreAssetName]: (coreBalance) / (10 ** decimals) }
+  // TODO: Making sure also the native token works
+  // TODO: Could it be that it returns a LOT of tokens? Maybe need to consider the decimals as well????
+  balancesArray.push(await uniswapV2Tvl(block, chainName));
+  console.log(balancesArray);
 
   //===================
   // Non-BDX Collateral
@@ -158,28 +167,31 @@ async function tvl(chainName, timestamp, block) {
   //================
   // BDX Collateral
   //================
-  // TODO: Uncomment whenever coingecko adds BDX price
+  // TODO: Move that to the collateral function instead of here in the main function
   const bdxBalance = {};
-  // bdxBalance[bdxCoingeckoId] = 0;
-  // for (let index = 0; index < bdstables.length; index++) {
-  //   bdxBalance[bdxCoingeckoId] += await getBalanceOfWithPercision(
-  //     block,
-  //     chainName,
-  //     bdstables[index].address,
-  //     bdxTokenAddress
-  //   );
-  // }
+  const bdxTokenAddress = chains[chainName].bdxTokenAddress;
+  const coingeckoMapBdxAddress = mapCoingeckoAddress(
+    chainName,
+    bdxTokenAddress
+  );
+  bdxBalance[coingeckoMapBdxAddress] = 0;
 
-  // console.log("=====================================");
-  // console.log(bdxBalance);
-  // console.log("=====================================");
+  for (let index = 0; index < bdstables.length; index++) {
+    bdxBalance[coingeckoMapBdxAddress] += await getBalanceOfWithPercision(
+      block,
+      chainName,
+      bdstables[index].address,
+      bdxTokenAddress
+    );
+  }
+
   balancesArray.push(bdxBalance);
 
   return sumBalances(balancesArray);
 }
 
 const rsk = async function rskTvl(timestamp, ethBlock, chainblocks) {
-  return tvl("rsk", timestamp, chainblocks["rsk"]);
+  return tvl("rsk", chainblocks["rsk"]);
 };
 
 module.exports = {
@@ -189,6 +201,5 @@ module.exports = {
   rsk: {
     tvl: rsk,
   },
-  // TODO: Should we include this?? It calls RSK twice
-  // tvl: sdk.util.sumChainTvls([rsk]),
+  tvl: sdk.util.sumChainTvls([rsk]),
 };
