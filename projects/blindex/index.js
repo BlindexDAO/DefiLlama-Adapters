@@ -176,7 +176,7 @@ async function tvl(chainName, block) {
   //=======
   // AMM
   //=======
-  // TODO: Making sure also the native token works
+  // TODO: Making sure also the native token works!!!!!!!!!!!!!!!!!!!!!!!!!!!
   balancesArray.push(await uniswapV2Tvl(block, chainName));
 
   //===================
