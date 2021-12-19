@@ -16,7 +16,7 @@ const { calculateUniTvl } = require("../helper/calculateUniTvl.js");
 const chains = {
   rsk: {
     uniswapFactoryAddress: "0x6d0aE8f3da7A451A82B48594E91Bf9d79491971d",
-    bdxTokenAddress: "0xB3dd46A470b2C3df15931238c61C49CDf429DD9a",
+    bdxTokenAddress: "0xb3dd46a470b2c3df15931238c61c49cdf429dd9a", // Must be lower case
     bdstables: [
       {
         name: "BDEU",
@@ -101,6 +101,19 @@ async function getBDStableCollateralBalances(block, chainName, bdstable) {
       : collateralBalance;
   }
 
+  const bdxTokenAddress = chains[chainName].bdxTokenAddress;
+  const coingeckoMapBdxAddress = mapCoingeckoAddress(
+    chainName,
+    bdxTokenAddress
+  );
+
+  balances[coingeckoMapBdxAddress] += await getBalanceOfWithPercision(
+    block,
+    chainName,
+    bdstable.address,
+    bdxTokenAddress
+  );
+
   return balances;
 }
 
@@ -133,14 +146,28 @@ function sumBalances(balancesArray) {
 }
 
 async function uniswapV2Tvl(block, chainName) {
-  return calculateUniTvl(
-    (addr) => mapCoingeckoAddress(chainName, addr),
+  const rawBalances = await calculateUniTvl(
+    (address) => address,
     block,
     chainName,
     chains[chainName].uniswapFactoryAddress,
     0,
     true
   );
+
+  const tokensAddresses = Object.keys(rawBalances);
+  const balances = {};
+
+  for (let index = 0; index < tokensAddresses.length; index++) {
+    const currentToken = tokensAddresses[index];
+    const decimals = (await sdk.api.erc20.decimals(currentToken, chainName))
+      .output;
+
+    balances[mapCoingeckoAddress(chainName, currentToken)] =
+      rawBalances[currentToken] / 10 ** decimals;
+  }
+
+  return balances;
 }
 
 async function tvl(chainName, block) {
@@ -150,12 +177,10 @@ async function tvl(chainName, block) {
   // AMM
   //=======
   // TODO: Making sure also the native token works
-  // TODO: Could it be that it returns a LOT of tokens? Maybe need to consider the decimals as well????
   balancesArray.push(await uniswapV2Tvl(block, chainName));
-  console.log(balancesArray);
 
   //===================
-  // Non-BDX Collateral
+  // Collateral
   //===================
   const bdstables = chains[chainName].bdstables;
   for (let index = 0; index < bdstables.length; index++) {
@@ -163,29 +188,6 @@ async function tvl(chainName, block) {
       await getBDStableCollateralBalances(block, chainName, bdstables[index])
     );
   }
-
-  //================
-  // BDX Collateral
-  //================
-  // TODO: Move that to the collateral function instead of here in the main function
-  const bdxBalance = {};
-  const bdxTokenAddress = chains[chainName].bdxTokenAddress;
-  const coingeckoMapBdxAddress = mapCoingeckoAddress(
-    chainName,
-    bdxTokenAddress
-  );
-  bdxBalance[coingeckoMapBdxAddress] = 0;
-
-  for (let index = 0; index < bdstables.length; index++) {
-    bdxBalance[coingeckoMapBdxAddress] += await getBalanceOfWithPercision(
-      block,
-      chainName,
-      bdstables[index].address,
-      bdxTokenAddress
-    );
-  }
-
-  balancesArray.push(bdxBalance);
 
   return sumBalances(balancesArray);
 }
@@ -197,7 +199,7 @@ const rsk = async function rskTvl(timestamp, ethBlock, chainblocks) {
 module.exports = {
   misrepresentedTokens: true,
   methodology:
-    "(1) AMM LP pairs - All the liquidity pools from the Factory address are used to find the LP pairs. This part of the TVL is equal to the liquidity on the AMM. (2) Collateral - All the collateral being used to support the stable coins - Bitcoin, Ethereum & BDX",
+    "(1) AMM LP pairs - All the liquidity pools from the Factory address are used to find the LP pairs. (2) Collateral - All the collateral being used to support the stable coins - Bitcoin, Ethereum & BDX",
   rsk: {
     tvl: rsk,
   },
