@@ -33,9 +33,9 @@ const chains = {
 };
 
 function mapCoingeckoAddress(chainName, address) {
-  let mappedName = chains[chainName].coingeckoMapping[address]
-    ? chains[chainName].coingeckoMapping[address]
-    : chains[chainName].coingeckoMapping[address.toLowerCase()];
+  let mappedName =
+    chains[chainName].coingeckoMapping[address] ||
+    chains[chainName].coingeckoMapping[address.toLowerCase()];
 
   if (!mappedName) {
     const addressPrefix =
