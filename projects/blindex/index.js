@@ -177,7 +177,7 @@ async function uniswapV2Tvl(block, chainName) {
   return balances;
 }
 
-async function getAllBDStables(bdxTokenAddress) {
+async function getAllBDStables(block, bdxTokenAddress, chainName) {
   const bdStables = [];
   const bdstablesLength = (
     await sdk.api.abi.call({
@@ -217,7 +217,11 @@ async function tvl(chainName, block) {
   //===================
   // Collateral
   //===================
-  const bdstables = await getAllBDStables(chains[chainName].bdxTokenAddress);
+  const bdstables = await getAllBDStables(
+    block,
+    chains[chainName].bdxTokenAddress,
+    chainName
+  );
   for (let index = 0; index < bdstables.length; index++) {
     balancesArray.push(
       await getBDStableCollateralBalances(block, chainName, bdstables[index])
