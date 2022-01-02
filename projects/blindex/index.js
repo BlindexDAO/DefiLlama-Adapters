@@ -16,8 +16,8 @@ const { formatAddressChecksum } = require("../helper/formatAddressChecksum.js");
 
 const chains = {
   rsk: {
-    uniswapFactoryAddress: "0x6d0aE8f3da7A451A82B48594E91Bf9d79491971d",
-    bdxTokenAddress: "0xb3dd46a470b2c3df15931238c61c49cdf429dd9a", // Must be lower case
+    uniswapFactoryAddress: "0x94B5462cF9F3eFDeBCf94115ce05408374238e3b",
+    bdxTokenAddress: "0x6542a10E68ceAC1fa0641ec0D799a7492795aaC1",
     // If a token doesn't exist on CoinGecko, map it to the base token it wrappes
     coingeckoMapping: {
       prefix: "rsk",
@@ -211,7 +211,6 @@ async function tvl(chainName, block) {
   //=======
   // AMM
   //=======
-  // TODO: Making sure also the native token works!!!!!!!!!!!!!!!!!!!!!!!!!!!
   balancesArray.push(await uniswapV2Tvl(block, chainName));
 
   //===================
