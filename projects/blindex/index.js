@@ -1,6 +1,7 @@
 const sdk = require("@defillama/sdk");
 const abi = require("../helper/abis/blindex.json");
 const { calculateUniTvl } = require("../helper/calculateUniTvl.js");
+const { formatAddressChecksum } = require("../helper/formatAddressChecksum.js");
 
 //-------------------------------------------------------------------------------------------------------------
 // How to add a new chain?
@@ -45,7 +46,7 @@ function mapCoingeckoAddress(chainName, address) {
 async function getBDStableCollateralBalances(block, chainName, bdstable) {
   const collateralPoolsLength = (
     await sdk.api.abi.call({
-      target: bdstable.address,
+      target: formatAddressChecksum(bdstable.address, chainName),
       abi: abi["getBdStablesPoolsLength"],
       chain: chainName,
       block,
@@ -56,7 +57,7 @@ async function getBDStableCollateralBalances(block, chainName, bdstable) {
   for (let index = 0; index < collateralPoolsLength; index++) {
     const poolAddress = (
       await sdk.api.abi.call({
-        target: bdstable.address,
+        target: formatAddressChecksum(bdstable.address, chainName),
         abi: abi["bdstable_pools_array"],
         params: index,
         chain: chainName,
@@ -72,7 +73,10 @@ async function getBDStableCollateralBalances(block, chainName, bdstable) {
   for (let index = 0; index < bdstableCollateralPools.length; index++) {
     const collateralAddress = await (
       await sdk.api.abi.call({
-        target: bdstableCollateralPools[index],
+        target: formatAddressChecksum(
+          bdstableCollateralPools[index],
+          chainName
+        ),
         abi: abi["getBDStablePoolCollateral"],
         chain: chainName,
         block,
@@ -114,14 +118,19 @@ async function getBDStableCollateralBalances(block, chainName, bdstable) {
 async function getBalanceOfWithPercision(block, chainName, owner, target) {
   let balance = (
     await sdk.api.erc20.balanceOf({
-      target,
-      owner,
+      target: formatAddressChecksum(target, chainName),
+      owner: formatAddressChecksum(owner, chainName),
       chain: chainName,
       block,
     })
   ).output;
 
-  const decimals = (await sdk.api.erc20.decimals(target, chainName)).output;
+  const decimals = (
+    await sdk.api.erc20.decimals(
+      formatAddressChecksum(target, chainName),
+      chainName
+    )
+  ).output;
   return balance / 10 ** decimals;
 }
 
@@ -141,10 +150,10 @@ function sumBalances(balancesArray) {
 
 async function uniswapV2Tvl(block, chainName) {
   const rawBalances = await calculateUniTvl(
-    (address) => address,
+    (address) => formatAddressChecksum(address, chainName),
     block,
     chainName,
-    chains[chainName].uniswapFactoryAddress,
+    formatAddressChecksum(chains[chainName].uniswapFactoryAddress, chainName),
     0,
     true
   );
@@ -154,8 +163,12 @@ async function uniswapV2Tvl(block, chainName) {
 
   for (let index = 0; index < tokensAddresses.length; index++) {
     const currentToken = tokensAddresses[index];
-    const decimals = (await sdk.api.erc20.decimals(currentToken, chainName))
-      .output;
+    const decimals = (
+      await sdk.api.erc20.decimals(
+        formatAddressChecksum(currentToken, chainName),
+        chainName
+      )
+    ).output;
 
     balances[mapCoingeckoAddress(chainName, currentToken)] =
       rawBalances[currentToken] / 10 ** decimals;
@@ -168,7 +181,7 @@ async function getAllBDStables(bdxTokenAddress) {
   const bdStables = [];
   const bdstablesLength = (
     await sdk.api.abi.call({
-      target: bdxTokenAddress,
+      target: formatAddressChecksum(bdxTokenAddress, chainName),
       abi: abi["getBdStablesLength"],
       chain: chainName,
       block,
@@ -179,7 +192,7 @@ async function getAllBDStables(bdxTokenAddress) {
     bdStables.push({
       address: (
         await sdk.api.abi.call({
-          target: bdxTokenAddress,
+          target: formatAddressChecksum(bdxTokenAddress, chainName),
           abi: abi["getBDStable"],
           chain: chainName,
           block,
