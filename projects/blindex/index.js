@@ -16,8 +16,8 @@ const { formatAddressChecksum } = require("../helper/formatAddressChecksum.js");
 
 const chains = {
   rsk: {
-    uniswapFactoryAddress: "0x94B5462cF9F3eFDeBCf94115ce05408374238e3b",
-    bdxTokenAddress: "0x6542a10E68ceAC1fa0641ec0D799a7492795aaC1",
+    uniswapFactoryAddress: "0x5Af7cba7CDfE30664ab6E06D8D2210915Ef73c2E",
+    bdxTokenAddress: "0x6542a10E68cEAc1Fa0641ec0D799a7492795AAC1",
     // If a token doesn't exist on CoinGecko, map it to the base token it wrappes
     coingeckoMapping: {
       prefix: "rsk",
@@ -90,7 +90,7 @@ async function getBDStableCollateralBalances(block, chainName, bdstable) {
     const collateralBalance = await getBalanceOfWithPercision(
       block,
       chainName,
-      bdstableCollateralPools[index],
+      formatAddressChecksum(bdstableCollateralPools[index], chainName),
       collateralAddress
     );
 
@@ -108,8 +108,8 @@ async function getBDStableCollateralBalances(block, chainName, bdstable) {
   balances[coingeckoMapBdxAddress] += await getBalanceOfWithPercision(
     block,
     chainName,
-    bdstable.address,
-    bdxTokenAddress
+    formatAddressChecksum(bdstable.address, chainName),
+    formatAddressChecksum(bdxTokenAddress, chainName)
   );
 
   return balances;
