@@ -37,7 +37,7 @@ function mapCoingeckoAddress(chainName, address) {
       chainName === "ethereum"
         ? ""
         : `${chains[chainName].coingeckoMapping["prefix"]}:`;
-    mappedName = `${addressPrefix}${address}`;
+    mappedName = `${addressPrefix}${formatAddressChecksum(address, chainName)}`;
   }
 
   return mappedName;
@@ -144,6 +144,8 @@ function sumBalances(balancesArray) {
       balances[coingeckoTokenId] += amount;
     }
 
+    console.log("=======================");
+    console.log(balances);
     return balances;
   }, {});
 }
@@ -227,6 +229,7 @@ async function tvl(chainName, block) {
     );
   }
 
+  console.log(balancesArray);
   return sumBalances(balancesArray);
 }
 
